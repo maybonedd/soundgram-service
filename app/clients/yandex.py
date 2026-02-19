@@ -10,51 +10,44 @@ class YandexMusicClient:
         }
 
     async def get_playlist_data(self, info: PlaylistInfo) -> dict:
-        print(f"Getting data for: {info}")
-        
         if info.is_old_format:
             url = f"https://music.yandex.ru/handlers/playlist.jsx?owner={info.owner}&kinds={info.kind}"
         else:
             url = f"https://music.yandex.ru/handlers/playlist.jsx?kinds={info.kind}"
         
-        print(f"Request URL: {url}")
-        
         try:
             async with httpx.AsyncClient(headers=self.headers, timeout=10.0, follow_redirects=True) as client:
                 response = await client.get(url)
-                print(f"Response status: {response.status_code}")
-                
-                if response.status_code == 200:
-                    data = response.json()
-                    return data
-                else:
-                    raise HTTPException(status_code=502, detail=f"Yandex returned {response.status_code}")
-                    
+                response.raise_for_status()
+                return response.json()
         except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="Timeout")
+            raise HTTPException(status_code=504, detail="Таймаут при запросе к Яндекс Музыке")
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                raise HTTPException(status_code=404, detail="Плейлист не найден или недоступен")
+            raise HTTPException(status_code=502, detail=f"Ошибка от Яндекс Музыки: {e.response.status_code}")
         except Exception as e:
-            print(f"Error: {str(e)}")
-            raise HTTPException(status_code=502, detail=str(e))
+            raise HTTPException(status_code=502, detail=f"Ошибка при получении данных: {str(e)}")
 
     def process_tracks(self, raw_data: dict) -> list:
         playlist = raw_data.get("playlist", raw_data)
         tracks = playlist.get("tracks", [])
-        
         processed = []
+        
         for item in tracks:
             track = item.get("track") if isinstance(item, dict) and "track" in item else item
-            
             if not isinstance(track, dict) or not track.get("id"):
                 continue
             
             album = track.get("albums", [{}])[0]
             album_id = album.get("id", "0")
-            
             artists = [a.get("name") for a in track.get("artists", []) if a.get("name")]
             
             cover_url = None
             if album.get("coverUri"):
                 cover_url = format_cover_url(album["coverUri"])
+            elif track.get("coverUri"):
+                cover_url = format_cover_url(track["coverUri"])
             
             processed.append({
                 "title": track.get("title", "Unknown"),
