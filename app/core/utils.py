@@ -16,7 +16,7 @@ def parse_yandex_url(url: str) -> PlaylistInfo:
     if match := re.search(new_pattern, url):
         return PlaylistInfo(owner=None, kind=match.group(1), is_old_format=False)
     
-    raise ValueError("Invalid Yandex Music playlist URL")
+    raise ValueError("Некорректный формат ссылки на плейлист Яндекс Музыки")
 
 def format_cover_url(template: Optional[str], size: str = "400x400") -> Optional[str]:
     if not template:
